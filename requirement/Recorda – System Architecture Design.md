@@ -129,6 +129,20 @@ CREATE TABLE assignments (
 - **`rule_sets`** (`id`, `org_id`, `version`, `price_tolerance_pct`, `price_tolerance_amt`, `qty_tolerance`, `currency`)
 - **`ml_evaluations`** (`id`, `model_version`, `dataset_name`, `accuracy`, `precision`, `recall`, `f1_score`, `confusion_matrix` JSONB, `evaluated_at`)
 
+### Delivery Schedule Management
+
+Each PO line item can have multiple dated delivery schedules. The current API prototype persists PO items, schedule status, allocation evidence, schedule amendment history, and immutable validation-run snapshots in a local SQLite database (`recorda.sqlite3`); the production PostgreSQL deployment should map these entities to equivalent relational tables.
+
+- **`evidence_documents`** registers Delivery Challans and GRNs by document ID, PO reference, and SHA-256 fingerprint. **`source_document_lines`** stores immutable line quantities and evidence dates; **`source_document_line_po_items`** records the allowed PO-item mapping for each line. A SHA-256 fingerprint can only be registered once.
+- **`delivery_schedules`** stores the planned quantity, confirmed expected date, and fulfillment status for each PO item.
+- **`schedule_amendments`** retains the old and proposed values, request actor, approval actor, timestamps, and approval status. An approved amendment updates the current schedule without deleting its history.
+- **`quantity_allocations`** allocates registered source-line quantity to an allowed PO item and optionally a schedule. `DISPATCH` requires a Delivery Challan; `RECEIPT` requires a GRN and can link to the dispatch allocation it verifies. Repeating an identical allocation is idempotent; conflicting allocations are rejected.
+- **`validation_runs`** stores each evaluation result as a separate snapshot so later schedule changes do not replace earlier results.
+
+Reconciliation keeps dispatch and receipt totals separate, limits allocations to the registered source-line quantity and schedule quantity, and reports unmatched receipts, unscheduled evidence, and in-transit dispatches independently. Outstanding quantities are overdue only against an active schedule with a confirmed date that has passed; dispatch without receipt evidence is not treated as loss.
+
+SQLite `BEGIN IMMEDIATE` serializes writers for allocation checks within one database file, but is not a substitute for testing the production database's transaction and constraint behavior under concurrent requests. The current upload endpoint only creates a presigned URL; it does not persist verified document bytes or extracted lines. Registration therefore establishes an API-side evidence record and supplied fingerprint, not proof that the uploaded file contents were independently verified.
+
 ---
 
 ## 5. Management Dashboard Queries

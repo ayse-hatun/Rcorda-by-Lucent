@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -7,9 +7,39 @@ from pydantic import BaseModel, Field
 
 class DocumentType(str, Enum):
     PURCHASE_ORDER = "PO"
+    DELIVERY_CHALLAN = "DELIVERY_CHALLAN"
     GOODS_RECEIVED_NOTE = "GRN"
     SUPPLIER_INVOICE = "INVOICE"
     UNKNOWN = "UNKNOWN"
+
+
+class DeliveryScheduleStatus(str, Enum):
+    SCHEDULED = "SCHEDULED"
+    PARTIALLY_FULFILLED = "PARTIALLY_FULFILLED"
+    FULFILLED = "FULFILLED"
+    CANCELLED = "CANCELLED"
+
+
+class ScheduleAmendmentStatus(str, Enum):
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class QuantityAllocationType(str, Enum):
+    DISPATCH = "DISPATCH"
+    RECEIPT = "RECEIPT"
+
+
+class DeliveryFindingType(str, Enum):
+    MISSING_DELIVERY_SCHEDULE = "MISSING_DELIVERY_SCHEDULE"
+    OVERDUE_DELIVERY = "OVERDUE_DELIVERY"
+    LATE_DELIVERY = "LATE_DELIVERY"
+    EARLY_DELIVERY = "EARLY_DELIVERY"
+    DISPATCH_NOT_RECEIVED = "DISPATCH_NOT_RECEIVED"
+    RECEIPT_WITHOUT_CHALLAN = "RECEIPT_WITHOUT_CHALLAN"
+    OVER_DELIVERY = "OVER_DELIVERY"
+    UNSCHEDULED_EVIDENCE = "UNSCHEDULED_EVIDENCE"
 
 
 class ExceptionStatus(str, Enum):
@@ -56,6 +86,101 @@ class LineItem(BaseModel):
     unit_price: Decimal
     line_total: Decimal
     bbox: Optional[BoundingBox] = None
+
+
+class PurchaseOrderItem(BaseModel):
+    po_item_id: str
+    po_reference: str
+    line_item_id: str
+    item_code: Optional[str] = None
+    description: str
+    ordered_quantity: Decimal = Field(gt=0)
+    unit: str = "pcs"
+
+
+class ScheduleAmendment(BaseModel):
+    amendment_id: str
+    schedule_id: str
+    previous_quantity: Decimal = Field(gt=0)
+    previous_expected_date: date
+    proposed_quantity: Decimal = Field(gt=0)
+    proposed_expected_date: date
+    status: ScheduleAmendmentStatus = ScheduleAmendmentStatus.PENDING_APPROVAL
+    requested_by: str
+    requested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+
+
+class DeliverySchedule(BaseModel):
+    schedule_id: str
+    po_item_id: str
+    planned_quantity: Decimal = Field(gt=0)
+    expected_delivery_date: date
+    status: DeliveryScheduleStatus = DeliveryScheduleStatus.SCHEDULED
+    amendment_history: List[ScheduleAmendment] = Field(default_factory=list)
+
+
+class EvidenceDocumentLine(BaseModel):
+    line_item_id: str
+    quantity: Decimal = Field(gt=0)
+    evidence_date: date
+    po_item_ids: List[str] = Field(min_length=1)
+
+
+class EvidenceDocument(BaseModel):
+    document_id: str
+    document_type: DocumentType
+    document_number: str
+    po_reference: str
+    sha256: str
+    lines: List[EvidenceDocumentLine] = Field(min_length=1)
+
+
+class QuantityAllocation(BaseModel):
+    allocation_id: str
+    allocation_type: QuantityAllocationType
+    source_document_type: DocumentType
+    source_document_id: str
+    source_line_item_id: str
+    source_line_quantity: Decimal = Field(gt=0)
+    evidence_date: date
+    po_item_id: str
+    schedule_id: Optional[str] = None
+    quantity: Decimal = Field(gt=0)
+    matched_dispatch_allocation_id: Optional[str] = None
+
+
+class DeliveryReconciliationFinding(BaseModel):
+    type: DeliveryFindingType
+    po_item_id: str
+    schedule_id: Optional[str] = None
+    quantity: Decimal
+    explanation: str
+
+
+class DeliveryReconciliationSummary(BaseModel):
+    po_item_id: str
+    evaluation_date: date
+    ordered_quantity: Decimal
+    scheduled_quantity: Decimal
+    quantity_due_by_evaluation_date: Decimal
+    dispatched_quantity: Decimal
+    accepted_quantity: Decimal
+    outstanding_quantity: Decimal
+    overdue_quantity: Decimal
+    dispatched_not_received_quantity: Decimal
+    unscheduled_dispatch_quantity: Decimal = Decimal("0")
+    unscheduled_accepted_quantity: Decimal = Decimal("0")
+
+
+class DeliveryValidationRun(BaseModel):
+    run_id: str
+    po_item_id: str
+    evaluation_date: date
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    summary: DeliveryReconciliationSummary
+    findings: List[DeliveryReconciliationFinding] = Field(default_factory=list)
 
 
 class DocumentMetadata(BaseModel):

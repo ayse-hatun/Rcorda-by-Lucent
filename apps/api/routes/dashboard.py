@@ -1,18 +1,13 @@
-from decimal import Decimal
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict
+from sqlalchemy.orm import Session
+
+from apps.api.database import get_db
+from apps.api.schemas import DashboardMetricsResponse
+from apps.api.services.reporting_service import ReportingService
 
 router = APIRouter()
-
-
-class DashboardMetricsResponse(BaseModel):
-    total_amount_under_review_pkr: Decimal
-    open_exceptions_count: int
-    transactions_reconciled_count: int
-    average_resolution_time_hours: float
-    department_breakdown: Dict[str, int]
-    critical_cases_count: int
 
 
 class MLClassifierMetricsResponse(BaseModel):
@@ -26,20 +21,8 @@ class MLClassifierMetricsResponse(BaseModel):
 
 
 @router.get("/metrics", response_model=DashboardMetricsResponse)
-def get_dashboard_metrics():
-    # Baseline active metrics for Day 1
-    return DashboardMetricsResponse(
-        total_amount_under_review_pkr=Decimal("2450000.00"),
-        open_exceptions_count=18,
-        transactions_reconciled_count=1420,
-        average_resolution_time_hours=18.4,
-        department_breakdown={
-            "STORES": 12,
-            "FINANCE": 6,
-            "PROCUREMENT": 2,
-        },
-        critical_cases_count=4,
-    )
+def get_dashboard_metrics(db: Session = Depends(get_db)):
+    return ReportingService(db).get_dashboard_metrics()
 
 
 @router.get("/ml-metrics", response_model=MLClassifierMetricsResponse)

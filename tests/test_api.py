@@ -24,9 +24,10 @@ def test_dashboard_metrics():
     response = client.get("/v1/dashboard/metrics")
     assert response.status_code == 200
     data = response.json()
-    assert "total_amount_under_review_pkr" in data
-    assert data["open_exceptions_count"] == 18
-    assert "STORES" in data["department_breakdown"]
+    assert "total_suppliers" in data
+    assert "open_exceptions" in data
+    assert "documents_awaiting_review" in data
+    assert data["open_exceptions"] >= 0
 
 
 def test_dashboard_ml_metrics():
