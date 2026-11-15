@@ -55,3 +55,8 @@ postgres-data/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Planning and Internal Specs (Local Only)
+requirement/
+PROJECT_CONTEXT.md
+
